@@ -1,4 +1,4 @@
-import { spawn } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import { Notice, QueryParams } from '../types';
 
 const API_URL = 'http://np-anotice-stock.eastmoney.com/api/security/ann';
@@ -29,55 +29,27 @@ interface RawNoticeData {
 }
 
 export class EastMoneyService {
-  private fetchData(params: Record<string, string | number>): Promise<EastMoneyResponse> {
-    return new Promise((resolve, reject) => {
-      const queryParts: string[] = [];
-      for (const [key, value] of Object.entries(params)) {
-        queryParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
-      }
-      const queryString = queryParts.join('&');
-      const url = `${API_URL}?${queryString}`;
+  private fetchData(params: Record<string, string | number>): EastMoneyResponse {
+    const queryParts: string[] = [];
+    for (const [key, value] of Object.entries(params)) {
+      queryParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
+    }
+    const queryString = queryParts.join('&');
+    const url = `${API_URL}?${queryString}`;
 
-      const curl = spawn('curl', [
-        '-s',
-        '--max-time', '15',
-        '--noproxy', '*',
-        '-H', 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        '-H', 'Accept: application/json',
-        url
-      ]);
-
-      let data = '';
-      let error = '';
-
-      curl.stdout.on('data', (chunk) => {
-        data += chunk.toString();
+    try {
+      const data = execSync(`curl -s --max-time 15 '${url}'`, {
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+        timeout: 20000,
       });
 
-      curl.stderr.on('data', (chunk) => {
-        error += chunk.toString();
-      });
-
-      curl.on('close', (code) => {
-        if (code !== 0) {
-          console.error('Curl error:', error);
-          reject(new Error(`Curl exited with code ${code}`));
-          return;
-        }
-
-        try {
-          const jsonData = JSON.parse(data);
-          resolve(jsonData as EastMoneyResponse);
-        } catch (err) {
-          console.error('Parse error:', data.substring(0, 500));
-          reject(new Error('Failed to parse JSON response'));
-        }
-      });
-
-      curl.on('error', (err) => {
-        reject(err);
-      });
-    });
+      const jsonData = JSON.parse(data) as EastMoneyResponse;
+      return jsonData;
+    } catch (error: any) {
+      console.error('Curl fetch error:', error.message);
+      throw new Error(`Failed to fetch data: ${error.message}`);
+    }
   }
 
   private mapToNotice(raw: RawNoticeData, index: number): Notice {
@@ -128,7 +100,7 @@ export class EastMoneyService {
     }
 
     try {
-      const response = await this.fetchData(requestParams);
+      const response = this.fetchData(requestParams);
 
       if (!response.data || !response.data.list) {
         return {
