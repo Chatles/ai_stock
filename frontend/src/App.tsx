@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { api } from '../services/api';
-import { Notice, MarketType } from '../types';
+import { api } from './services/api';
+import { Notice, MarketType } from './types';
 import Header from './components/Header';
 import FilterPanel from './components/FilterPanel';
 import NoticeList from './components/NoticeList';
