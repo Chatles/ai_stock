@@ -1,62 +1,81 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api } from './services/api';
-import { Notice, MarketType } from './types';
+import { Notice, NoticeAnalysis, MarketType, AnalysisFilter } from './types';
 import Header from './components/Header';
 import FilterPanel from './components/FilterPanel';
-import NoticeList from './components/NoticeList';
+import NoticeCard from './components/NoticeCard';
 import './styles/App.css';
 
 const App: React.FC = () => {
   const [notices, setNotices] = useState<Notice[]>([]);
+  const [analysisMap, setAnalysisMap] = useState<Record<string, NoticeAnalysis>>({});
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState<number>(1);
+  const [, setPage] = useState<number>(1);
   const [total, setTotal] = useState<number>(0);
-  const [pageSize] = useState<number>(20);
   const [market, setMarket] = useState<MarketType>('ALL');
-  const [keyword, setKeyword] = useState<string>('');
+  const [, setKeyword] = useState<string>('');
+  const [analysisFilter, setAnalysisFilter] = useState<AnalysisFilter>('ALL');
+  const [sortBy, setSortBy] = useState<'利好程度' | 'notice_date'>('利好程度');
+  const [order, setOrder] = useState<'ASC' | 'DESC'>('DESC');
+  const [showAnalysis, setShowAnalysis] = useState<boolean>(false);
 
-  const fetchNotices = useCallback(async () => {
+  const fetchAnalysisData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.getNotices({
-        page,
-        pageSize,
-        market,
-        keyword: keyword || undefined,
-      });
-      if (response.code === 200) {
-        setNotices(response.data.list);
-        setTotal(response.data.total);
-      } else {
-        setError(response.message || '获取数据失败');
-      }
+      const result = await api.getAnalysisNotices(analysisFilter, sortBy, order);
+      setAnalysisMap(
+        result.notices.reduce((acc, item) => {
+          acc[item.notice_id] = item;
+          return acc;
+        }, {} as Record<string, NoticeAnalysis>)
+      );
+      setNotices(result.notices.map(n => ({
+        noticeDate: n.notice_date,
+        securityCode: n.security_code,
+        securityNameAbbr: n.security_name,
+        noticeType: n.notice_type,
+        noticeTitle: n.notice_title,
+        noticeUrl: n.notice_url,
+        id: n.notice_id,
+      })));
+      setTotal(result.total);
     } catch (err) {
-      setError('网络请求失败，请稍后重试');
-      console.error('Fetch error:', err);
+      setError('获取分析数据失败');
+      console.error('Fetch analysis error:', err);
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, market, keyword]);
+  }, [analysisFilter, sortBy, order]);
 
   useEffect(() => {
-    fetchNotices();
-  }, [fetchNotices]);
+    if (showAnalysis) {
+      fetchAnalysisData();
+    }
+  }, [showAnalysis, fetchAnalysisData]);
 
   const handleMarketChange = (newMarket: MarketType) => {
     setMarket(newMarket);
     setPage(1);
   };
 
+  const handleAnalysisFilterChange = (filter: AnalysisFilter) => {
+    setAnalysisFilter(filter);
+  };
+
+  const handleSortChange = (newSortBy: '利好程度' | 'notice_date', newOrder: 'ASC' | 'DESC') => {
+    setSortBy(newSortBy);
+    setOrder(newOrder);
+  };
+
+  const handleToggleView = () => {
+    setShowAnalysis(!showAnalysis);
+  };
+
   const handleSearch = (searchKeyword: string) => {
     setKeyword(searchKeyword);
     setPage(1);
-  };
-
-  const handlePageChange = (newPage: number) => {
-    setPage(newPage);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
@@ -65,14 +84,17 @@ const App: React.FC = () => {
       <div className="main-container">
         <FilterPanel
           currentMarket={market}
+          currentAnalysisFilter={analysisFilter}
           onMarketChange={handleMarketChange}
+          onAnalysisFilterChange={handleAnalysisFilterChange}
+          onSortChange={handleSortChange}
         />
         <div className="content-area">
           <div className="stats-bar">
-            <span className="total-count">共 {total.toLocaleString()} 条公告</span>
-            <span className="page-info">
-              第 {page} 页 / 共 {Math.ceil(total / pageSize)} 页
-            </span>
+            <button className="view-toggle" onClick={handleToggleView}>
+              {showAnalysis ? '查看全部公告' : '查看分析结果'}
+            </button>
+            <span className="total-count">共 {total.toLocaleString()} 条</span>
           </div>
           {error ? (
             <div className="error-message">
@@ -80,14 +102,33 @@ const App: React.FC = () => {
               <span>{error}</span>
             </div>
           ) : (
-            <NoticeList
-              notices={notices}
-              loading={loading}
-              currentPage={page}
-              pageSize={pageSize}
-              total={total}
-              onPageChange={handlePageChange}
-            />
+            <div className="notice-list">
+              {loading ? (
+                [...Array(5)].map((_, index) => (
+                  <div key={index} className="notice-card skeleton">
+                    <div className="skeleton-line title"></div>
+                    <div className="skeleton-line company"></div>
+                    <div className="skeleton-line meta"></div>
+                  </div>
+                ))
+              ) : notices.length === 0 ? (
+                <div className="empty-state">
+                  <span className="empty-icon">📭</span>
+                  <p className="empty-text">
+                    {showAnalysis ? '暂无分析数据，请稍后刷新' : '暂无公告数据'}
+                  </p>
+                </div>
+              ) : (
+                notices.map((notice, index) => (
+                  <NoticeCard
+                    key={notice.id || index}
+                    notice={notice}
+                    analysis={showAnalysis ? analysisMap[notice.id || ''] : undefined}
+                    index={index}
+                  />
+                ))
+              )}
+            </div>
           )}
         </div>
       </div>

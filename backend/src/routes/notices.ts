@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { eastMoneyService } from '../services/eastmoney';
 import { mockDataService } from '../services/mockData';
+import { analysisService } from '../services/analysis';
+import { schedulerService } from '../services/scheduler';
 import { MarketType } from '../types';
 
 const router = Router();
@@ -68,6 +70,51 @@ router.get('/notices', async (req: Request, res: Response) => {
 
 router.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+router.get('/analysis/status', (_req: Request, res: Response) => {
+  res.json({
+    code: 200,
+    data: schedulerService.getStatus(),
+    message: 'success',
+  });
+});
+
+router.post('/analysis/run', async (_req: Request, res: Response) => {
+  try {
+    schedulerService.runAnalysis();
+    res.json({
+      code: 200,
+      message: 'Analysis started',
+    });
+  } catch (error) {
+    res.status(500).json({
+      code: 500,
+      message: 'Analysis failed',
+    });
+  }
+});
+
+router.get('/analysis/notices', async (req: Request, res: Response) => {
+  try {
+    const resultFilter = req.query.result as '利好' | '无影响' | '待定' | undefined;
+    const sortBy = (req.query.sortBy as '利好程度' | 'notice_date') || '利好程度';
+    const order = (req.query.order as 'ASC' | 'DESC') || 'DESC';
+
+    const notices = await analysisService.getAnalyzedNotices(resultFilter, sortBy, order);
+
+    res.json({
+      code: 200,
+      data: notices,
+      message: 'success',
+    });
+  } catch (error) {
+    console.error('Error fetching analysis:', error);
+    res.status(500).json({
+      code: 500,
+      message: 'Internal server error',
+    });
+  }
 });
 
 export default router;
