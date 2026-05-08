@@ -1,4 +1,4 @@
-import { execSync, spawn } from 'child_process';
+import { execSync } from 'child_process';
 import { Notice, QueryParams } from '../types';
 
 const API_URL = 'http://np-anotice-stock.eastmoney.com/api/security/ann';

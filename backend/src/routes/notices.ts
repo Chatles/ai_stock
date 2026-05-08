@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { eastMoneyService } from '../services/eastmoney';
 import { mockDataService } from '../services/mockData';
 import { MarketType } from '../types';
 
@@ -29,12 +30,26 @@ router.get('/notices', async (req: Request, res: Response) => {
       });
     }
 
-    const result = mockDataService.getNotices({
-      page,
-      pageSize: Math.min(pageSize, 50),
-      market,
-      keyword,
-    });
+    let result;
+    let useMock = false;
+
+    try {
+      result = await eastMoneyService.getNotices({
+        page,
+        pageSize: Math.min(pageSize, 50),
+        market,
+        keyword,
+      });
+    } catch (error) {
+      console.log('Real API failed, falling back to mock data:', error);
+      useMock = true;
+      result = mockDataService.getNotices({
+        page,
+        pageSize: Math.min(pageSize, 50),
+        market,
+        keyword,
+      });
+    }
 
     res.json({
       code: 200,
