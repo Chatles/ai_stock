@@ -1,3 +1,11 @@
+if (process.env.HTTP_PROXY || process.env.HTTPS_PROXY || process.env.http_proxy || process.env.https_proxy) {
+  delete process.env.HTTP_PROXY;
+  delete process.env.HTTPS_PROXY;
+  delete process.env.http_proxy;
+  delete process.env.https_proxy;
+  console.log('Proxy environment variables cleared');
+}
+
 import express from 'express';
 import cors from 'cors';
 import noticeRoutes from './routes/notices';

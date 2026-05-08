@@ -1,22 +1,24 @@
-import https from 'https';
+import { spawn } from 'child_process';
 import { Notice, QueryParams } from '../types';
 
-const API_HOST = 'np-anotice-stock.eastmoney.com';
-const API_PATH = '/api/security/ann';
+const API_URL = 'http://np-anotice-stock.eastmoney.com/api/security/ann';
 
 interface EastMoneyResponse {
-  code: string;
-  message: string;
   data?: {
-    total_hits: number;
     list: RawNoticeData[];
+    total_hits: number;
+    page_index: number;
+    page_size: number;
   };
+  error?: string;
+  success: number;
 }
 
 interface RawNoticeData {
   notice_date: string;
   codes: Array<{
-    code: string;
+    stock_code: string;
+    short_name?: string;
     ann_type: string;
   }>;
   columns: Array<{
@@ -24,72 +26,69 @@ interface RawNoticeData {
   }>;
   art_code: string;
   title: string;
-  short_name?: string;
-  stock_code?: string;
 }
 
 export class EastMoneyService {
-  private async fetchData(params: Record<string, string | number>): Promise<EastMoneyResponse> {
+  private fetchData(params: Record<string, string | number>): Promise<EastMoneyResponse> {
     return new Promise((resolve, reject) => {
       const queryParts: string[] = [];
       for (const [key, value] of Object.entries(params)) {
         queryParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
       }
       const queryString = queryParts.join('&');
+      const url = `${API_URL}?${queryString}`;
 
-      const options = {
-        hostname: API_HOST,
-        port: 443,
-        path: `${API_PATH}?${queryString}`,
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Referer': 'https://data.eastmoney.com/notices/',
-          'Accept': 'application/json, text/plain, */*',
-          'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-          'Connection': 'keep-alive',
-        },
-      };
+      const curl = spawn('curl', [
+        '-s',
+        '--max-time', '15',
+        '--noproxy', '*',
+        '-H', 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        '-H', 'Accept: application/json',
+        url
+      ]);
 
-      const req = https.request(options, (res) => {
-        const chunks: Buffer[] = [];
-        res.on('data', (chunk: Buffer) => chunks.push(chunk));
-        res.on('end', () => {
-          const buffer = Buffer.concat(chunks);
-          const dataStr = buffer.toString('utf-8');
-          try {
-            const jsonData = JSON.parse(dataStr);
-            resolve(jsonData as EastMoneyResponse);
-          } catch (error) {
-            console.error('Parse error, first 500 chars:', dataStr.substring(0, 500));
-            reject(new Error('Failed to parse JSON response'));
-          }
-        });
+      let data = '';
+      let error = '';
+
+      curl.stdout.on('data', (chunk) => {
+        data += chunk.toString();
       });
 
-      req.on('error', (err) => {
-        console.error('Request error:', err.message);
+      curl.stderr.on('data', (chunk) => {
+        error += chunk.toString();
+      });
+
+      curl.on('close', (code) => {
+        if (code !== 0) {
+          console.error('Curl error:', error);
+          reject(new Error(`Curl exited with code ${code}`));
+          return;
+        }
+
+        try {
+          const jsonData = JSON.parse(data);
+          resolve(jsonData as EastMoneyResponse);
+        } catch (err) {
+          console.error('Parse error:', data.substring(0, 500));
+          reject(new Error('Failed to parse JSON response'));
+        }
+      });
+
+      curl.on('error', (err) => {
         reject(err);
       });
-
-      req.setTimeout(30000, () => {
-        req.destroy();
-        reject(new Error('Request timeout'));
-      });
-
-      req.end();
     });
   }
 
   private mapToNotice(raw: RawNoticeData, index: number): Notice {
-    const stockCode = raw.codes?.[0]?.code || raw.stock_code || '';
+    const stockCode = raw.codes?.[0]?.stock_code || '';
     const artCode = raw.art_code || '';
     const noticeUrl = `https://data.eastmoney.com/notices/detail/${stockCode}/${artCode}.html`;
 
     return {
       noticeDate: raw.notice_date || '',
       securityCode: stockCode,
-      securityNameAbbr: raw.short_name || '',
+      securityNameAbbr: raw.codes?.[0]?.short_name || '',
       noticeType: raw.columns?.[0]?.column_name || '',
       noticeTitle: raw.title || '',
       noticeUrl: noticeUrl,
@@ -104,7 +103,7 @@ export class EastMoneyService {
     pageSize: number;
   }> {
     const page = params.page || 1;
-    const pageSize = Math.min(params.pageSize || 20, 100);
+    const pageSize = Math.min(params.pageSize || 20, 50);
 
     const requestParams: Record<string, string | number> = {
       sr: -1,
