@@ -11,20 +11,46 @@ const App: React.FC = () => {
   const [analysisMap, setAnalysisMap] = useState<Record<string, NoticeAnalysis>>({});
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [, setPage] = useState<number>(1);
+  const [page, setPage] = useState<number>(1);
   const [total, setTotal] = useState<number>(0);
+  const [pageSize] = useState<number>(50);
   const [market, setMarket] = useState<MarketType>('ALL');
-  const [, setKeyword] = useState<string>('');
+  const [keyword, setKeyword] = useState<string>('');
   const [analysisFilter, setAnalysisFilter] = useState<AnalysisFilter>('ALL');
   const [sortBy, setSortBy] = useState<'利好程度' | 'notice_date'>('利好程度');
   const [order, setOrder] = useState<'ASC' | 'DESC'>('DESC');
-  const [showAnalysis, setShowAnalysis] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<'all' | 'analysis'>('analysis');
+
+  const fetchNotices = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await api.getNotices({
+        page,
+        pageSize,
+        market,
+        keyword: keyword || undefined,
+      });
+      if (response.code === 200) {
+        setNotices(response.data.list);
+        setTotal(response.data.total);
+      } else {
+        setError(response.message || '获取数据失败');
+      }
+    } catch (err) {
+      setError('网络请求失败');
+      console.error('Fetch error:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [page, pageSize, market, keyword]);
 
   const fetchAnalysisData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await api.getAnalysisNotices(analysisFilter, sortBy, order);
+      const resultFilter = analysisFilter === 'ALL' ? undefined : analysisFilter;
+      const result = await api.getAnalysisNotices(resultFilter, sortBy, order);
       setAnalysisMap(
         result.notices.reduce((acc, item) => {
           acc[item.notice_id] = item;
@@ -50,10 +76,12 @@ const App: React.FC = () => {
   }, [analysisFilter, sortBy, order]);
 
   useEffect(() => {
-    if (showAnalysis) {
+    if (viewMode === 'all') {
+      fetchNotices();
+    } else {
       fetchAnalysisData();
     }
-  }, [showAnalysis, fetchAnalysisData]);
+  }, [viewMode, fetchNotices, fetchAnalysisData]);
 
   const handleMarketChange = (newMarket: MarketType) => {
     setMarket(newMarket);
@@ -69,13 +97,17 @@ const App: React.FC = () => {
     setOrder(newOrder);
   };
 
-  const handleToggleView = () => {
-    setShowAnalysis(!showAnalysis);
-  };
-
   const handleSearch = (searchKeyword: string) => {
     setKeyword(searchKeyword);
     setPage(1);
+  };
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+  };
+
+  const handleViewModeChange = (mode: 'all' | 'analysis') => {
+    setViewMode(mode);
   };
 
   return (
@@ -91,9 +123,20 @@ const App: React.FC = () => {
         />
         <div className="content-area">
           <div className="stats-bar">
-            <button className="view-toggle" onClick={handleToggleView}>
-              {showAnalysis ? '查看全部公告' : '查看分析结果'}
-            </button>
+            <div className="view-toggles">
+              <button
+                className={`view-toggle ${viewMode === 'all' ? 'active' : ''}`}
+                onClick={() => handleViewModeChange('all')}
+              >
+                全部公告
+              </button>
+              <button
+                className={`view-toggle ${viewMode === 'analysis' ? 'active' : ''}`}
+                onClick={() => handleViewModeChange('analysis')}
+              >
+                分析结果
+              </button>
+            </div>
             <span className="total-count">共 {total.toLocaleString()} 条</span>
           </div>
           {error ? (
@@ -102,10 +145,10 @@ const App: React.FC = () => {
               <span>{error}</span>
             </div>
           ) : (
-            <div className="notice-list">
+            <div className="notice-list compact">
               {loading ? (
-                [...Array(5)].map((_, index) => (
-                  <div key={index} className="notice-card skeleton">
+                [...Array(10)].map((_, index) => (
+                  <div key={index} className="notice-card compact skeleton">
                     <div className="skeleton-line title"></div>
                     <div className="skeleton-line company"></div>
                     <div className="skeleton-line meta"></div>
@@ -115,7 +158,7 @@ const App: React.FC = () => {
                 <div className="empty-state">
                   <span className="empty-icon">📭</span>
                   <p className="empty-text">
-                    {showAnalysis ? '暂无分析数据，请稍后刷新' : '暂无公告数据'}
+                    {viewMode === 'analysis' ? '暂无分析数据，请稍后刷新' : '暂无公告数据'}
                   </p>
                 </div>
               ) : (
@@ -123,11 +166,21 @@ const App: React.FC = () => {
                   <NoticeCard
                     key={notice.id || index}
                     notice={notice}
-                    analysis={showAnalysis ? analysisMap[notice.id || ''] : undefined}
-                    index={index}
+                    analysis={viewMode === 'analysis' ? analysisMap[notice.id || ''] : undefined}
                   />
                 ))
               )}
+            </div>
+          )}
+          {viewMode === 'all' && total > pageSize && (
+            <div className="pagination">
+              <button onClick={() => handlePageChange(page - 1)} disabled={page <= 1}>
+                上一页
+              </button>
+              <span>第 {page} 页</span>
+              <button onClick={() => handlePageChange(page + 1)} disabled={page >= Math.ceil(total / pageSize)}>
+                下一页
+              </button>
             </div>
           )}
         </div>

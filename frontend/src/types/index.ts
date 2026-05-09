@@ -9,6 +9,7 @@ export interface Notice {
 }
 
 export interface NoticeAnalysis {
+  id?: number;
   notice_id: string;
   security_code: string;
   security_name: string;
@@ -16,11 +17,19 @@ export interface NoticeAnalysis {
   notice_date: string;
   notice_url: string;
   notice_type: string;
-  notice_content: string | null;
-  analysis_result: '利好' | '无影响' | '待定';
+  is_filtered: number;
+  filter_reason: string | null;
+  analysis_status: 'pending' | 'analyzing' | 'completed' | 'failed';
+  analysis_result: '利好' | '无影响' | '待定' | null;
   利好程度: number;
-  analysis_reason: string;
-  analyzed_at: string;
+  price_change_predict: string | null;
+  content_summary: string | null;
+  fundamental_analysis: string | null;
+  industry_analysis: string | null;
+  competitive_analysis: string | null;
+  analysis_reason: string | null;
+  analyzed_at: string | null;
+  created_at?: string;
 }
 
 export interface NoticeResponse {

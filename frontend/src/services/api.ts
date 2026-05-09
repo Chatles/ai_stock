@@ -1,14 +1,12 @@
 import axios from 'axios';
-import { NoticeResponse, AnalysisResponse, QueryParams, NoticeAnalysis } from '../types';
+import { NoticeResponse, Notice, NoticeAnalysis } from '../types';
 
 const API_BASE_URL = '/api';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  timeout: 120000,
+  headers: { 'Content-Type': 'application/json' },
 });
 
 apiClient.interceptors.response.use(
@@ -19,22 +17,40 @@ apiClient.interceptors.response.use(
   }
 );
 
-export const fetchNotices = async (params: QueryParams): Promise<NoticeResponse> => {
+export const fetchNotices = async (params: {
+  page?: number;
+  pageSize?: number;
+  market?: string;
+  keyword?: string;
+}): Promise<NoticeResponse> => {
   const response = await apiClient.get<NoticeResponse>('/notices', { params });
   return response.data;
 };
 
-export const fetchAnalysisNotices = async (
-  analysisFilter?: string,
+export interface AnalysisResponse {
+  code: number;
+  data: NoticeAnalysis[];
+  message: string;
+}
+
+export interface FundamentalResponse {
+  code: number;
+  data: {
+    fundamental: string;
+    valuation: any;
+    industry: any;
+  };
+  message: string;
+}
+
+export const getAnalysisNotices = async (
+  resultFilter?: '利好' | '无影响' | '待定',
   sortBy: '利好程度' | 'notice_date' = '利好程度',
   order: 'ASC' | 'DESC' = 'DESC'
 ): Promise<{ notices: NoticeAnalysis[]; total: number }> => {
-  const params: Record<string, any> = {
-    sortBy,
-    order,
-  };
-  if (analysisFilter && analysisFilter !== 'ALL') {
-    params.result = analysisFilter;
+  const params: Record<string, any> = { sortBy, order };
+  if (resultFilter) {
+    params.result = resultFilter;
   }
   const response = await apiClient.get<AnalysisResponse>('/analysis/notices', { params });
   return {
@@ -43,12 +59,27 @@ export const fetchAnalysisNotices = async (
   };
 };
 
-export const triggerAnalysis = async (): Promise<void> => {
-  await apiClient.post('/analysis/run');
+export const analyzeNotice = async (notice: Notice): Promise<AnalysisResponse> => {
+  const response = await apiClient.post<AnalysisResponse>('/analysis/analyze', {
+    noticeId: notice.id,
+    securityCode: notice.securityCode,
+    securityName: notice.securityNameAbbr,
+    noticeTitle: notice.noticeTitle,
+    noticeDate: notice.noticeDate,
+    noticeUrl: notice.noticeUrl,
+    noticeType: notice.noticeType,
+  });
+  return response.data;
+};
+
+export const getFundamental = async (code: string): Promise<FundamentalResponse> => {
+  const response = await apiClient.get<FundamentalResponse>(`/analysis/fundamental/${code}`);
+  return response.data;
 };
 
 export const api = {
   getNotices: fetchNotices,
-  getAnalysisNotices: fetchAnalysisNotices,
-  triggerAnalysis,
+  getAnalysisNotices,
+  analyzeNotice,
+  getFundamental,
 };

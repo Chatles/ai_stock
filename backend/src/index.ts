@@ -9,7 +9,6 @@ if (process.env.HTTP_PROXY || process.env.HTTPS_PROXY || process.env.http_proxy 
 import express from 'express';
 import cors from 'cors';
 import noticeRoutes from './routes/notices';
-import { schedulerService } from './services/scheduler';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -38,15 +37,5 @@ app.get('/', (_req, res) => {
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
   console.log(`API endpoint: http://localhost:${PORT}/api/notices`);
-
-  const ANALYSIS_INTERVAL = process.env.ANALYSIS_INTERVAL
-    ? parseInt(process.env.ANALYSIS_INTERVAL)
-    : 60 * 60 * 1000;
-
-  if (process.env.AUTO_ANALYSIS !== 'false') {
-    setTimeout(() => {
-      schedulerService.start(ANALYSIS_INTERVAL);
-    }, 5000);
-    console.log('Auto analysis scheduler started');
-  }
+  console.log('Auto analysis scheduler: DISABLED (set AUTO_ANALYSIS=true to enable)');
 });

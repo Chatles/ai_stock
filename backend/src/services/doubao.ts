@@ -2,18 +2,19 @@ import axios from 'axios';
 
 interface DoubaoResponse {
   choices: Array<{
-    message: {
-      content: string;
-    };
+    message: { content: string; };
   }>;
-  error?: {
-    message: string;
-  };
+  error?: { message: string; };
 }
 
-interface AnalysisResult {
+interface FullAnalysisResult {
   result: '利好' | '无影响' | '待定';
   利好程度: number;
+  priceChangePredict: string;
+  contentSummary: string;
+  fundamentalAnalysis: string;
+  industryAnalysis: string;
+  competitiveAnalysis: string;
   reason: string;
 }
 
@@ -28,130 +29,160 @@ export class DoubaoService {
     }
   }
 
-  async analyzeNotice(
+  async analyzeNoticeFull(
     noticeTitle: string,
     noticeContent: string,
     stockCode: string,
-    stockName: string
-  ): Promise<AnalysisResult> {
+    stockName: string,
+    fundamentalData: string
+  ): Promise<FullAnalysisResult> {
     if (!this.apiKey) {
       return this.fallbackAnalysis(noticeTitle);
     }
 
-    const prompt = this.buildPrompt(noticeTitle, noticeContent, stockCode, stockName);
+    const prompt = this.buildFullPrompt(noticeTitle, noticeContent, stockCode, stockName, fundamentalData);
 
     try {
-      const response = await axios.post<DoubaoResponse>(
-        `${this.baseUrl}/chat/completions`,
-        {
-          model: 'doubao-seed-2.0',
-          messages: [
-            {
-              role: 'user',
-              content: prompt,
-            },
-          ],
-          max_tokens: 500,
-          temperature: 0.7,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${this.apiKey}`,
-          },
-          timeout: 30000,
-        }
-      );
-
-      if (response.data.error) {
-        console.error('Doubao API error:', response.data.error);
-        return this.fallbackAnalysis(noticeTitle);
-      }
-
-      return this.parseResponse(response.data.choices[0]?.message?.content || '');
-    } catch (error) {
-      console.error('Error calling Doubao API:', error);
+      const response = await this.callAPI(prompt);
+      return this.parseFullResponse(response);
+    } catch (error: any) {
+      console.error('AI analysis error:', error.message);
       return this.fallbackAnalysis(noticeTitle);
     }
   }
 
-  private buildPrompt(
+  private async callAPI(prompt: string): Promise<string> {
+    const response = await axios.post<DoubaoResponse>(
+      `${this.baseUrl}/chat/completions`,
+      {
+        model: 'doubao-seed-2.0',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 2000,
+        temperature: 0.7,
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+        },
+        timeout: 60000,
+      }
+    );
+
+    if (response.data.error) {
+      throw new Error(response.data.error.message);
+    }
+
+    return response.data.choices[0]?.message?.content || '';
+  }
+
+  private buildFullPrompt(
     title: string,
     content: string,
     code: string,
-    name: string
+    name: string,
+    fundamental: string
   ): string {
-    return `你是一个专业的股票分析师。请分析以下A股公告对第二天股价的影响。
+    return `你是专业股票分析师。请深度分析以下A股公告对次日股价的影响。
 
-股票信息：
-- 代码：${code}
-- 名称：${name}
+## 股票信息
+代码：${code}
+名称：${name}
 
-公告标题：${title}
-${content ? `公告内容：${content}` : ''}
+## 公告标题
+${title}
 
-请根据以下标准进行分析：
+## 公告内容摘要
+${content || '无详细内容，仅根据标题分析'}
 
-1. **利好**：公告内容对公司业绩、主营业务、行业地位有正面影响
-   - 例如：业绩大幅增长、新订单签订、技术突破、政策利好、并购重组等
+## 公司基本面数据
+${fundamental || '暂无数据'}
 
-2. **无影响**：公告内容与股价无直接关联
-   - 例如：董事会会议通知、高管任免公告（不影响经营）、独立董事候选人声明、日常事务公告等
+## 分析要求
 
-3. **待定**：公告内容有潜在影响，但需要结合更多因素判断
-   - 例如：战略合作协议（需看具体条款）、行业政策（需看力度）、竞争对手动态等
+请从以下维度进行深度分析：
 
-请以JSON格式返回分析结果：
+1. **内容摘要**：公告的核心内容是什么（20字内）
+2. **基本面影响**：对公司财务、盈利能力的实际影响（40字内）
+3. **行业分析**：所处行业现状及趋势，与行业平均估值对比（40字内）
+4. **竞争分析**：相对竞争对手的优劣势，可能的市场影响（40字内）
+5. **股价预测**：
+   - 预测次日涨跌方向和幅度（如：预计上涨2%-4%）
+   - 上涨概率评估（高/中/低）
+6. **投资建议**：是否值得关注（强烈推荐/推荐/观望/回避）
+
+## 输出格式（JSON）
 {
   "result": "利好|无影响|待定",
-  "利好程度": 1-5的整数（仅当result为"利好"时填写，1为轻微利好，5为重大利好）,
-  "reason": "分析理由，简洁明了"
+  "利好程度": 1-5的整数（1=轻微利好，5=重大利好）,
+  "priceChangePredict": "具体涨跌预测，如'预计上涨2%-4%'",
+  "contentSummary": "内容摘要（20字内）",
+  "fundamentalAnalysis": "基本面分析（40字内）",
+  "industryAnalysis": "行业分析（40字内）",
+  "competitiveAnalysis": "竞争分析（40字内）",
+  "reason": "综合判断理由（30字内）"
 }
 
-只返回JSON，不要有其他内容。`;
+请只输出JSON，不要有其他内容。`;
   }
 
-  private parseResponse(content: string): AnalysisResult {
+  private parseFullResponse(content: string): FullAnalysisResult {
     try {
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const data = JSON.parse(jsonMatch[0]);
         return {
           result: data.result || '待定',
-          利好程度: data.利好程度 || 3,
-          reason: data.reason || '分析完成',
+          利好程度: Math.min(5, Math.max(1, data.利好程度 || 3)),
+          priceChangePredict: data.priceChangePredict || '待观察',
+          contentSummary: data.contentSummary || '',
+          fundamentalAnalysis: data.fundamentalAnalysis || '',
+          industryAnalysis: data.industryAnalysis || '',
+          competitiveAnalysis: data.competitiveAnalysis || '',
+          reason: data.reason || '',
         };
       }
     } catch (error) {
-      console.error('Parse response error:', error);
+      console.error('Parse error:', error);
     }
     return this.fallbackAnalysis('');
   }
 
-  private fallbackAnalysis(noticeTitle: string): AnalysisResult {
+  private fallbackAnalysis(noticeTitle: string): FullAnalysisResult {
     const title = noticeTitle.toLowerCase();
-    const noImpactKeywords = [
-      '董事会', '监事会', '独立董事', '候选人', '声明', '承诺',
-      '会议通知', '召开', '议案', '延期', '补充公告', '更正',
-      '辞职', '离任', '退休', '工作调整'
-    ];
+    const noImpactKeywords = ['董事会', '独立董事', '监事会', '候选人', '声明', '承诺', '会议通知', '辞职'];
+    const goodKeywords = ['业绩', '净利润', '营收', '利润', '分红', '回购', '增持', '订单', '合同', '突破', '中标', '新药', '并购', '重组'];
 
-    const hasNoImpactKeyword = noImpactKeywords.some(keyword =>
-      title.includes(keyword)
-    );
-
-    if (hasNoImpactKeyword) {
+    if (noImpactKeywords.some(k => title.includes(k))) {
       return {
-        result: '无影响',
-        利好程度: 0,
-        reason: '根据标题判断为日常事务性公告，对股价无影响'
+        result: '无影响', 利好程度: 0,
+        priceChangePredict: '预计无明显波动',
+        contentSummary: '日常治理公告', fundamentalAnalysis: '无影响',
+        industryAnalysis: '无影响', competitiveAnalysis: '无影响',
+        reason: '日常事务公告'
+      };
+    }
+
+    if (goodKeywords.some(k => title.includes(k))) {
+      return {
+        result: '利好', 利好程度: 3,
+        priceChangePredict: '预计上涨1%-3%',
+        contentSummary: '需获取完整公告内容分析',
+        fundamentalAnalysis: '需结合财务数据判断',
+        industryAnalysis: '需了解行业情况',
+        competitiveAnalysis: '需对比竞争对手',
+        reason: '标题含利好关键词，建议深入分析'
       };
     }
 
     return {
-      result: '待定',
-      利好程度: 3,
-      reason: '需要进一步分析'
+      result: '待定', 利好程度: 3,
+      priceChangePredict: '待观察',
+      contentSummary: '需获取完整公告内容',
+      fundamentalAnalysis: '需获取财务数据',
+      industryAnalysis: '需了解行业动态',
+      competitiveAnalysis: '需对比竞争对手',
+      reason: '建议获取公告全文和基本面数据'
     };
   }
 }

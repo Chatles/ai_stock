@@ -35,5 +35,6 @@ app.get('/', (_req, res) => {
 app.listen(PORT, () => {
     console.log(`Server is running on http://localhost:${PORT}`);
     console.log(`API endpoint: http://localhost:${PORT}/api/notices`);
+    console.log('Auto analysis scheduler: DISABLED (set AUTO_ANALYSIS=true to enable)');
 });
 //# sourceMappingURL=index.js.map

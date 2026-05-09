@@ -5,48 +5,25 @@ const child_process_1 = require("child_process");
 const API_URL = 'http://np-anotice-stock.eastmoney.com/api/security/ann';
 class EastMoneyService {
     fetchData(params) {
-        return new Promise((resolve, reject) => {
-            const queryParts = [];
-            for (const [key, value] of Object.entries(params)) {
-                queryParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
-            }
-            const queryString = queryParts.join('&');
-            const url = `${API_URL}?${queryString}`;
-            const curl = (0, child_process_1.spawn)('curl', [
-                '-s',
-                '--max-time', '15',
-                '--noproxy', '*',
-                '-H', 'User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                '-H', 'Accept: application/json',
-                url
-            ]);
-            let data = '';
-            let error = '';
-            curl.stdout.on('data', (chunk) => {
-                data += chunk.toString();
+        const queryParts = [];
+        for (const [key, value] of Object.entries(params)) {
+            queryParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`);
+        }
+        const queryString = queryParts.join('&');
+        const url = `${API_URL}?${queryString}`;
+        try {
+            const data = (0, child_process_1.execSync)(`curl -s --max-time 15 '${url}'`, {
+                encoding: 'utf-8',
+                stdio: ['pipe', 'pipe', 'pipe'],
+                timeout: 20000,
             });
-            curl.stderr.on('data', (chunk) => {
-                error += chunk.toString();
-            });
-            curl.on('close', (code) => {
-                if (code !== 0) {
-                    console.error('Curl error:', error);
-                    reject(new Error(`Curl exited with code ${code}`));
-                    return;
-                }
-                try {
-                    const jsonData = JSON.parse(data);
-                    resolve(jsonData);
-                }
-                catch (err) {
-                    console.error('Parse error:', data.substring(0, 500));
-                    reject(new Error('Failed to parse JSON response'));
-                }
-            });
-            curl.on('error', (err) => {
-                reject(err);
-            });
-        });
+            const jsonData = JSON.parse(data);
+            return jsonData;
+        }
+        catch (error) {
+            console.error('Curl fetch error:', error.message);
+            throw new Error(`Failed to fetch data: ${error.message}`);
+        }
     }
     mapToNotice(raw, index) {
         const stockCode = raw.codes?.[0]?.stock_code || '';
@@ -84,7 +61,7 @@ class EastMoneyService {
             requestParams.keyword = params.keyword;
         }
         try {
-            const response = await this.fetchData(requestParams);
+            const response = this.fetchData(requestParams);
             if (!response.data || !response.data.list) {
                 return {
                     list: [],

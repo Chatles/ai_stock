@@ -53,7 +53,6 @@ const NoticeList: React.FC<NoticeListProps> = ({
           <NoticeCard
             key={notice.id || `${notice.securityCode}_${notice.noticeDate}_${index}`}
             notice={notice}
-            index={index}
           />
         ))}
       </div>

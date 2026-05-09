@@ -1,18 +1,20 @@
-import React from 'react';
-import { Notice, NoticeAnalysis } from '../types';
+import React, { useState } from 'react';
+import { Notice } from '../types';
+import { analyzeNotice, getFundamental } from '../services/api';
 
 interface NoticeCardProps {
   notice: Notice;
-  analysis?: NoticeAnalysis;
-  index: number;
+  analysis?: any;
 }
 
-const NoticeCard: React.FC<NoticeCardProps> = ({ notice, analysis, index }) => {
+const NoticeCard: React.FC<NoticeCardProps> = ({ notice, analysis }) => {
+  const [analyzing, setAnalyzing] = useState(false);
+  const [showFundamental, setShowFundamental] = useState(false);
+  const [fundamentalData, setFundamentalData] = useState<string | null>(null);
+
   const formatDate = (dateStr: string): string => {
     if (!dateStr) return '';
-    const date = new Date(dateStr);
-    if (isNaN(date.getTime())) return dateStr;
-    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    return dateStr.split(' ')[0].replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$2-$3');
   };
 
   const handleClick = () => {
@@ -22,64 +24,101 @@ const NoticeCard: React.FC<NoticeCardProps> = ({ notice, analysis, index }) => {
   };
 
   const getMarketBadge = (code: string): string => {
-    if (code.startsWith('6')) return '沪市';
-    if (code.startsWith('0') && !code.startsWith('00')) return '深市';
-    if (code.startsWith('00')) return '深市';
-    if (code.startsWith('3')) return '创业板';
-    if (code.startsWith('688')) return '科创板';
-    return '其他';
+    if (code.startsWith('6')) return '沪';
+    if (code.startsWith('688')) return '科';
+    if (code.startsWith('3')) return '创';
+    return '深';
   };
 
-  const getAnalysisBadge = (result: string, level: number): { bg: string; text: string } => {
+  const getResultBadge = (result: string | null, level: number): { bg: string; text: string } => {
+    if (!result) return { bg: '#999', text: '未分析' };
     switch (result) {
-      case '利好':
-        return { bg: '#52c41a', text: `利好 ${level}分` };
-      case '无影响':
-        return { bg: '#d9d9d9', text: '无影响' };
-      case '待定':
-        return { bg: '#faad14', text: '待定' };
-      default:
-        return { bg: '#d9d9d9', text: '未分析' };
+      case '利好': return { bg: '#52c41a', text: `利好${level}分` };
+      case '无影响': return { bg: '#999', text: '无影响' };
+      case '待定': return { bg: '#faad14', text: '待定' };
+      default: return { bg: '#999', text: '未知' };
     }
   };
 
-  const badge = analysis ? getAnalysisBadge(analysis.analysis_result, analysis.利好程度) : null;
+  const handleAnalyze = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (analyzing) return;
+    setAnalyzing(true);
+    try {
+      await analyzeNotice(notice);
+      window.location.reload();
+    } catch (error) {
+      console.error('分析失败:', error);
+      alert('分析失败，请重试');
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleShowFundamental = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (showFundamental && fundamentalData) {
+      setShowFundamental(false);
+      setFundamentalData(null);
+      return;
+    }
+    setShowFundamental(true);
+    setFundamentalData('加载中...');
+    try {
+      const result = await getFundamental(notice.securityCode);
+      setFundamentalData(result.data.fundamental);
+    } catch (error) {
+      console.error('获取基本面失败:', error);
+      setFundamentalData('获取失败，请重试');
+    }
+  };
+
+  const badge = analysis ? getResultBadge(analysis.analysis_result, analysis.利好程度) : null;
 
   return (
-    <div
-      className={`notice-card ${analysis ? 'has-analysis' : ''}`}
-      onClick={handleClick}
-      style={{ animationDelay: `${index * 50}ms` }}
-    >
-      <div className="notice-header">
-        <span className="company-badge">{getMarketBadge(notice.securityCode)}</span>
+    <div className={`notice-card compact ${analysis?.analysis_result === '利好' ? 'has-bullish' : ''}`}>
+      <div className="compact-header">
+        <span className="market-tag">{getMarketBadge(notice.securityCode)}</span>
+        <span className="stock-name">{notice.securityNameAbbr}</span>
         <span className="stock-code">{notice.securityCode}</span>
-        <span className="company-name">{notice.securityNameAbbr}</span>
-        {badge && (
-          <span
-            className="analysis-badge"
-            style={{ backgroundColor: badge.bg }}
+        {badge ? (
+          <span className="result-badge" style={{ backgroundColor: badge.bg }}>{badge.text}</span>
+        ) : (
+          <button
+            className="action-btn analyze-btn"
+            onClick={handleAnalyze}
+            disabled={analyzing}
           >
-            {badge.text}
-          </span>
+            {analyzing ? '分析中...' : 'AI分析'}
+          </button>
         )}
+        <button className="action-btn fundamental-btn" onClick={handleShowFundamental}>
+          基本面
+        </button>
       </div>
-      <h3 className="notice-title">{notice.noticeTitle}</h3>
-      {analysis && analysis.analysis_reason && (
-        <div className="analysis-reason" title={analysis.analysis_reason}>
-          {analysis.analysis_reason}
+      <div className="compact-title" onClick={handleClick} title={notice.noticeTitle}>
+        {notice.noticeTitle.length > 60 ? notice.noticeTitle.substring(0, 60) + '...' : notice.noticeTitle}
+      </div>
+      {showFundamental && fundamentalData && (
+        <div className="fundamental-panel">
+          <div className="fundamental-title">📊 {notice.securityNameAbbr}({notice.securityCode}) 基本面</div>
+          <pre className="fundamental-content">{fundamentalData}</pre>
         </div>
       )}
-      <div className="notice-footer">
+      {analysis && analysis.content_summary && (
+        <div className="compact-summary">
+          <span className="summary-label">摘要:</span> {analysis.content_summary}
+        </div>
+      )}
+      {analysis && analysis.price_change_predict && (
+        <div className="price-predict">
+          📈 {analysis.price_change_predict}
+        </div>
+      )}
+      <div className="compact-footer">
         <span className="notice-type">{notice.noticeType}</span>
         <span className="notice-date">{formatDate(notice.noticeDate)}</span>
       </div>
-      {notice.noticeUrl && (
-        <div className="notice-link-indicator">
-          <span>查看PDF</span>
-          <span className="link-arrow">→</span>
-        </div>
-      )}
     </div>
   );
 };
