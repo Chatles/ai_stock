@@ -1,6 +1,5 @@
 import { Router, Request, Response } from 'express';
 import { eastMoneyService } from '../services/eastmoney';
-import { mockDataService } from '../services/mockData';
 import { analysisService } from '../services/analysis';
 import { MarketType } from '../types';
 
@@ -33,7 +32,6 @@ router.get('/notices', async (req: Request, res: Response) => {
     }
 
     let result;
-    let useMock = false;
 
     try {
       result = await eastMoneyService.getNotices({
@@ -44,14 +42,12 @@ router.get('/notices', async (req: Request, res: Response) => {
         noticeType,
       });
     } catch (error) {
-      console.log('Real API failed, falling back to mock data:', error);
-      useMock = true;
-      // result = mockDataService.getNotices({
-      //   page,
-      //   pageSize: Math.min(pageSize, 50),
-      //   market,
-      //   keyword,
-      // });
+      console.error('Failed to fetch notices:', error);
+      return res.status(500).json({
+        code: 500,
+        message: 'Failed to fetch notices',
+        data: null,
+      });
     }
 
     res.json({
