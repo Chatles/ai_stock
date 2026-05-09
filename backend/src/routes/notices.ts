@@ -44,12 +44,12 @@ router.get('/notices', async (req: Request, res: Response) => {
     } catch (error) {
       console.log('Real API failed, falling back to mock data:', error);
       useMock = true;
-      result = mockDataService.getNotices({
-        page,
-        pageSize: Math.min(pageSize, 50),
-        market,
-        keyword,
-      });
+      // result = mockDataService.getNotices({
+      //   page,
+      //   pageSize: Math.min(pageSize, 50),
+      //   market,
+      //   keyword,
+      // });
     }
 
     res.json({
