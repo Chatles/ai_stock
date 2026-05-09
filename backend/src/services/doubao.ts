@@ -55,7 +55,7 @@ export class DoubaoService {
     const response = await axios.post<DoubaoResponse>(
       `${this.baseUrl}/chat/completions`,
       {
-        model: 'doubao-seed-2.0',
+        model: 'doubao-seed-2-0-pro-260215',
         messages: [{ role: 'user', content: prompt }],
         max_tokens: 2000,
         temperature: 0.7,

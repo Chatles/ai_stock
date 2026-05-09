@@ -28,6 +28,8 @@ export interface NoticeAnalysis {
   industry_analysis: string | null;
   competitive_analysis: string | null;
   analysis_reason: string | null;
+  notice_content: string | null;
+  fundamental_data: string | null;
   analyzed_at: string | null;
   created_at?: string;
 }

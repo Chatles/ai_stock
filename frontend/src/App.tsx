@@ -16,10 +16,36 @@ const App: React.FC = () => {
   const [pageSize] = useState<number>(50);
   const [market, setMarket] = useState<MarketType>('ALL');
   const [keyword, setKeyword] = useState<string>('');
+  const [noticeType, setNoticeType] = useState<string>('');
+  const [noticeTypes, setNoticeTypes] = useState<Array<{ type: string; count: number }>>([]);
   const [analysisFilter, setAnalysisFilter] = useState<AnalysisFilter>('ALL');
   const [sortBy, setSortBy] = useState<'利好程度' | 'notice_date'>('利好程度');
   const [order, setOrder] = useState<'ASC' | 'DESC'>('DESC');
-  const [viewMode, setViewMode] = useState<'all' | 'analysis'>('analysis');
+  const [viewMode, setViewMode] = useState<'all' | 'analysis'>('all');
+
+  const fetchNoticeTypes = useCallback(async () => {
+    try {
+      const result = await api.getNoticeTypes();
+      if (result.code === 200) {
+        setNoticeTypes(result.data);
+      }
+    } catch (err) {
+      console.error('Fetch notice types error:', err);
+    }
+  }, []);
+
+  const fetchAnalysisData = useCallback(async () => {
+    try {
+      const result = await api.getAnalysisNotices(undefined, 'notice_date', 'DESC');
+      const newMap: Record<string, NoticeAnalysis> = {};
+      result.notices.forEach(item => {
+        newMap[item.notice_id] = item;
+      });
+      setAnalysisMap(prev => ({ ...prev, ...newMap }));
+    } catch (err) {
+      console.error('Fetch analysis data error:', err);
+    }
+  }, []);
 
   const fetchNotices = useCallback(async () => {
     setLoading(true);
@@ -30,6 +56,7 @@ const App: React.FC = () => {
         pageSize,
         market,
         keyword: keyword || undefined,
+        noticeType: noticeType || undefined,
       });
       if (response.code === 200) {
         setNotices(response.data.list);
@@ -43,48 +70,29 @@ const App: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, pageSize, market, keyword]);
-
-  const fetchAnalysisData = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const resultFilter = analysisFilter === 'ALL' ? undefined : analysisFilter;
-      const result = await api.getAnalysisNotices(resultFilter, sortBy, order);
-      setAnalysisMap(
-        result.notices.reduce((acc, item) => {
-          acc[item.notice_id] = item;
-          return acc;
-        }, {} as Record<string, NoticeAnalysis>)
-      );
-      setNotices(result.notices.map(n => ({
-        noticeDate: n.notice_date,
-        securityCode: n.security_code,
-        securityNameAbbr: n.security_name,
-        noticeType: n.notice_type,
-        noticeTitle: n.notice_title,
-        noticeUrl: n.notice_url,
-        id: n.notice_id,
-      })));
-      setTotal(result.total);
-    } catch (err) {
-      setError('获取分析数据失败');
-      console.error('Fetch analysis error:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [analysisFilter, sortBy, order]);
+  }, [page, pageSize, market, keyword, noticeType]);
 
   useEffect(() => {
     if (viewMode === 'all') {
       fetchNotices();
-    } else {
-      fetchAnalysisData();
     }
-  }, [viewMode, fetchNotices, fetchAnalysisData]);
+  }, [viewMode, fetchNotices]);
+
+  useEffect(() => {
+    fetchAnalysisData();
+  }, [fetchAnalysisData]);
+
+  useEffect(() => {
+    fetchNoticeTypes();
+  }, [fetchNoticeTypes]);
 
   const handleMarketChange = (newMarket: MarketType) => {
     setMarket(newMarket);
+    setPage(1);
+  };
+
+  const handleNoticeTypeChange = (newType: string) => {
+    setNoticeType(newType);
     setPage(1);
   };
 
@@ -108,7 +116,47 @@ const App: React.FC = () => {
 
   const handleViewModeChange = (mode: 'all' | 'analysis') => {
     setViewMode(mode);
+    if (mode === 'analysis') {
+      fetchAnalysisData();
+    }
   };
+
+  const getFilteredNotices = () => {
+    if (viewMode === 'analysis') {
+      const allAnalysis = Object.values(analysisMap);
+      let filtered = analysisFilter === 'ALL'
+        ? allAnalysis
+        : allAnalysis.filter(a => a.analysis_result === analysisFilter);
+
+      if (sortBy === '利好程度') {
+        filtered.sort((a, b) => order === 'DESC' ? b.利好程度 - a.利好程度 : a.利好程度 - b.利好程度);
+      } else {
+        filtered.sort((a, b) => order === 'DESC'
+          ? b.notice_date.localeCompare(a.notice_date)
+          : a.notice_date.localeCompare(b.notice_date));
+      }
+
+      return filtered.map(a => ({
+        noticeDate: a.notice_date,
+        securityCode: a.security_code,
+        securityNameAbbr: a.security_name,
+        noticeType: a.notice_type,
+        noticeTitle: a.notice_title,
+        noticeUrl: a.notice_url || '',
+        id: a.notice_id,
+      }));
+    }
+
+    return notices.map(notice => {
+      const analysis = analysisMap[notice.id || ''];
+      return { ...notice, _analysis: analysis };
+    });
+  };
+
+  const displayNotices = getFilteredNotices();
+  const displayTotal = viewMode === 'analysis'
+    ? Object.values(analysisMap).length
+    : total;
 
   return (
     <div className="app">
@@ -117,8 +165,11 @@ const App: React.FC = () => {
         <FilterPanel
           currentMarket={market}
           currentAnalysisFilter={analysisFilter}
+          currentNoticeType={noticeType}
+          noticeTypes={noticeTypes}
           onMarketChange={handleMarketChange}
           onAnalysisFilterChange={handleAnalysisFilterChange}
+          onNoticeTypeChange={handleNoticeTypeChange}
           onSortChange={handleSortChange}
         />
         <div className="content-area">
@@ -137,7 +188,7 @@ const App: React.FC = () => {
                 分析结果
               </button>
             </div>
-            <span className="total-count">共 {total.toLocaleString()} 条</span>
+            <span className="total-count">共 {displayTotal.toLocaleString()} 条</span>
           </div>
           {error ? (
             <div className="error-message">
@@ -154,19 +205,19 @@ const App: React.FC = () => {
                     <div className="skeleton-line meta"></div>
                   </div>
                 ))
-              ) : notices.length === 0 ? (
+              ) : displayNotices.length === 0 ? (
                 <div className="empty-state">
                   <span className="empty-icon">📭</span>
                   <p className="empty-text">
-                    {viewMode === 'analysis' ? '暂无分析数据，请稍后刷新' : '暂无公告数据'}
+                    {viewMode === 'analysis' ? '暂无分析数据，请先在"全部公告"中点击AI分析' : '暂无公告数据'}
                   </p>
                 </div>
               ) : (
-                notices.map((notice, index) => (
+                displayNotices.map((notice: any, index) => (
                   <NoticeCard
-                    key={notice.id || index}
+                    key={(notice as any).id || index}
                     notice={notice}
-                    analysis={viewMode === 'analysis' ? analysisMap[notice.id || ''] : undefined}
+                    analysis={(notice as any)._analysis || analysisMap[(notice as any).id || '']}
                   />
                 ))
               )}

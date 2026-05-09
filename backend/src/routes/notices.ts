@@ -14,6 +14,7 @@ router.get('/notices', async (req: Request, res: Response) => {
     const pageSize = parseInt(req.query.pageSize as string) || 20;
     const market = (req.query.market as MarketType) || 'ALL';
     const keyword = req.query.keyword as string | undefined;
+    const noticeType = req.query.noticeType as string | undefined;
 
     if (!VALID_MARKETS.includes(market)) {
       return res.status(400).json({
@@ -40,6 +41,7 @@ router.get('/notices', async (req: Request, res: Response) => {
         pageSize: Math.min(pageSize, 50),
         market,
         keyword,
+        noticeType,
       });
     } catch (error) {
       console.log('Real API failed, falling back to mock data:', error);
@@ -73,6 +75,39 @@ router.get('/health', (_req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
     scheduler: 'disabled'
   });
+});
+
+router.get('/notice-types', async (_req: Request, res: Response) => {
+  try {
+    const result = await eastMoneyService.getNotices({
+      page: 1,
+      pageSize: 100,
+    });
+
+    const typeCount: Record<string, number> = {};
+    result.list.forEach(notice => {
+      if (notice.noticeType) {
+        typeCount[notice.noticeType] = (typeCount[notice.noticeType] || 0) + 1;
+      }
+    });
+
+    const types = Object.entries(typeCount)
+      .map(([type, count]) => ({ type, count }))
+      .sort((a, b) => b.count - a.count);
+
+    res.json({
+      code: 200,
+      data: types,
+      message: 'success',
+    });
+  } catch (error) {
+    console.error('Error fetching notice types:', error);
+    res.status(500).json({
+      code: 500,
+      message: 'Failed to fetch notice types',
+      data: null,
+    });
+  }
 });
 
 router.get('/analysis/notices', async (req: Request, res: Response) => {
