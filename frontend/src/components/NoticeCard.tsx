@@ -42,28 +42,39 @@ const NoticeCard: React.FC<NoticeCardProps> = ({ notice, analysis }) => {
   };
 
   const handleAnalyze = async (e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
     if (analyzing) return;
+
+    console.log('开始分析公告:', notice.noticeTitle);
     setAnalyzing(true);
+
     try {
-      await analyzeNotice(notice);
-      window.location.reload();
+      const result = await analyzeNotice(notice);
+      console.log('分析成功:', result);
+
+      if (result.code === 200) {
+        window.location.reload();
+      }
     } catch (error) {
       console.error('分析失败:', error);
       alert('分析失败，请重试');
-    } finally {
       setAnalyzing(false);
     }
   };
 
   const handleShowFundamental = async (e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
+
     if (showFundamental) {
       setShowFundamental(false);
       return;
     }
+
     setShowFundamental(true);
     setFundamentalData('加载中...');
+
     try {
       const result = await getFundamental(notice.securityCode);
       setFundamentalData(result.data.fundamental);
@@ -74,6 +85,7 @@ const NoticeCard: React.FC<NoticeCardProps> = ({ notice, analysis }) => {
   };
 
   const handleShowDetail = (e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
     setShowDetail(!showDetail);
   };

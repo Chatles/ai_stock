@@ -160,7 +160,12 @@ const App: React.FC = () => {
 
   return (
     <div className="app">
-      <Header onSearch={handleSearch} />
+      <Header
+        onSearch={handleSearch}
+        noticeTypes={noticeTypes}
+        currentNoticeType={noticeType}
+        onNoticeTypeChange={handleNoticeTypeChange}
+      />
       <div className="main-container">
         <FilterPanel
           currentMarket={market}

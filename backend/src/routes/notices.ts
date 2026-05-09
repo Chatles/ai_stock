@@ -79,17 +79,37 @@ router.get('/health', (_req: Request, res: Response) => {
 
 router.get('/notice-types', async (_req: Request, res: Response) => {
   try {
-    const result = await eastMoneyService.getNotices({
-      page: 1,
-      pageSize: 100,
-    });
-
     const typeCount: Record<string, number> = {};
-    result.list.forEach(notice => {
-      if (notice.noticeType) {
-        typeCount[notice.noticeType] = (typeCount[notice.noticeType] || 0) + 1;
+    const pageSize = 500;
+    let page = 1;
+    let totalFetched = 0;
+    const maxPages = 20;
+
+    while (page <= maxPages) {
+      const result = await eastMoneyService.getNotices({
+        page,
+        pageSize,
+      });
+
+      if (result.list.length === 0) {
+        break;
       }
-    });
+
+      result.list.forEach(notice => {
+        if (notice.noticeType) {
+          typeCount[notice.noticeType] = (typeCount[notice.noticeType] || 0) + 1;
+        }
+      });
+
+      totalFetched += result.list.length;
+      page++;
+
+      if (result.list.length < pageSize) {
+        break;
+      }
+    }
+
+    console.log(`[NoticeTypes] Fetched ${totalFetched} notices, found ${Object.keys(typeCount).length} types`);
 
     const types = Object.entries(typeCount)
       .map(([type, count]) => ({ type, count }))

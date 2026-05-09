@@ -72,6 +72,41 @@ body {
   background-clip: text;
 }
 
+.header-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  flex: 1;
+  max-width: 800px;
+}
+
+.notice-type-selector {
+  flex-shrink: 0;
+}
+
+.notice-type-select {
+  padding: 0.6rem 1rem;
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  background-color: var(--secondary-dark);
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 180px;
+  max-width: 220px;
+}
+
+.notice-type-select:hover {
+  border-color: var(--accent-red);
+}
+
+.notice-type-select:focus {
+  outline: none;
+  border-color: var(--accent-red);
+  background-color: var(--primary-dark);
+}
+
 .search-box {
   display: flex;
   gap: 0.5rem;

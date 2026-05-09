@@ -4,11 +4,8 @@ import { MarketType, AnalysisFilter } from '../types';
 interface FilterPanelProps {
   currentMarket: MarketType;
   currentAnalysisFilter: AnalysisFilter;
-  currentNoticeType: string;
-  noticeTypes: Array<{ type: string; count: number }>;
   onMarketChange: (market: MarketType) => void;
   onAnalysisFilterChange: (filter: AnalysisFilter) => void;
-  onNoticeTypeChange: (type: string) => void;
   onSortChange: (sortBy: '利好程度' | 'notice_date', order: 'ASC' | 'DESC') => void;
 }
 
@@ -30,11 +27,8 @@ const analysisFilters: { value: AnalysisFilter; label: string; color: string }[]
 const FilterPanel: React.FC<FilterPanelProps> = ({
   currentMarket,
   currentAnalysisFilter,
-  currentNoticeType,
-  noticeTypes,
   onMarketChange,
   onAnalysisFilterChange,
-  onNoticeTypeChange,
   onSortChange,
 }) => {
   return (
@@ -53,33 +47,6 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
             >
               <span className="filter-label">{item.label}</span>
               {currentMarket === item.value && <span className="active-indicator">✓</span>}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="filter-section">
-        <div className="filter-header">
-          <span className="filter-icon">📋</span>
-          <span>公告类型</span>
-        </div>
-        <div className="filter-list">
-          <button
-            className={`filter-item ${currentNoticeType === '' ? 'active' : ''}`}
-            onClick={() => onNoticeTypeChange('')}
-          >
-            <span className="filter-label">全部类型</span>
-            {currentNoticeType === '' && <span className="active-indicator">✓</span>}
-          </button>
-          {noticeTypes.map((item) => (
-            <button
-              key={item.type}
-              className={`filter-item ${currentNoticeType === item.type ? 'active' : ''}`}
-              onClick={() => onNoticeTypeChange(item.type)}
-            >
-              <span className="filter-label" title={item.type}>{item.type.length > 12 ? item.type.substring(0, 12) + '...' : item.type}</span>
-              <span className="filter-count">({item.count})</span>
-              {currentNoticeType === item.type && <span className="active-indicator">✓</span>}
             </button>
           ))}
         </div>
@@ -106,15 +73,21 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
 
       <div className="filter-section">
         <div className="filter-header">
-          <span className="filter-icon">📈</span>
-          <span>排序</span>
+          <span className="filter-icon">📅</span>
+          <span>排序方式</span>
         </div>
         <div className="filter-list">
-          <button className="filter-item" onClick={() => onSortChange('利好程度', 'DESC')}>
-            <span className="filter-label">利好程度 ↓</span>
+          <button
+            className="filter-item"
+            onClick={() => onSortChange('notice_date', 'DESC')}
+          >
+            <span className="filter-label">最新优先</span>
           </button>
-          <button className="filter-item" onClick={() => onSortChange('notice_date', 'DESC')}>
-            <span className="filter-label">日期 ↓</span>
+          <button
+            className="filter-item"
+            onClick={() => onSortChange('利好程度', 'DESC')}
+          >
+            <span className="filter-label">利好程度</span>
           </button>
         </div>
       </div>

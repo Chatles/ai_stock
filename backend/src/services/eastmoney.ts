@@ -1,5 +1,6 @@
 import { execSync } from 'child_process';
 import { Notice, QueryParams } from '../types';
+import { SearchService } from './searchService';
 
 const API_URL = 'http://np-anotice-stock.eastmoney.com/api/security/ann';
 
@@ -75,11 +76,13 @@ export class EastMoneyService {
     pageSize: number;
   }> {
     const page = params.page || 1;
-    const pageSize = Math.min(params.pageSize || 20, 50);
+    const requestPageSize = params.pageSize || 20;
+    const pageSize = Math.min(requestPageSize, 50);
+    const fetchSize = params.keyword ? 50 : Math.min(requestPageSize, 100);
 
     const requestParams: Record<string, string | number> = {
       sr: -1,
-      page_size: pageSize,
+      page_size: fetchSize,
       page_index: page,
       ann_type: 'A',
       client_source: 'web',
@@ -93,10 +96,6 @@ export class EastMoneyService {
 
     if (params.endDate) {
       requestParams.end_time = params.endDate;
-    }
-
-    if (params.keyword) {
-      requestParams.keyword = params.keyword;
     }
 
     if (params.noticeType) {
@@ -116,10 +115,20 @@ export class EastMoneyService {
       }
 
       let list = (response.data.list || []).map((item, idx) => this.mapToNotice(item, idx));
-      const total = response.data.total_hits || list.length;
+      let total = response.data.total_hits || list.length;
 
       if (params.noticeType && list.length > 0) {
         list = list.filter(notice => notice.noticeType === params.noticeType);
+      }
+
+      if (params.keyword && list.length > 0) {
+        console.log(`[Search] Filtering ${list.length} notices with keyword: ${params.keyword}`);
+        const searchResult = SearchService.applyFilters(list, {
+          keyword: params.keyword
+        });
+        console.log(`[Search] Filtered to ${searchResult.list.length} results`);
+        list = searchResult.list;
+        total = searchResult.total;
       }
 
       return {
