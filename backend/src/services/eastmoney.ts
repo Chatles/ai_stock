@@ -99,6 +99,10 @@ export class EastMoneyService {
       requestParams.keyword = params.keyword;
     }
 
+    if (params.noticeType) {
+      requestParams.column = params.noticeType;
+    }
+
     try {
       const response = this.fetchData(requestParams);
 
@@ -111,8 +115,12 @@ export class EastMoneyService {
         };
       }
 
-      const list = (response.data.list || []).map((item, idx) => this.mapToNotice(item, idx));
+      let list = (response.data.list || []).map((item, idx) => this.mapToNotice(item, idx));
       const total = response.data.total_hits || list.length;
+
+      if (params.noticeType && list.length > 0) {
+        list = list.filter(notice => notice.noticeType === params.noticeType);
+      }
 
       return {
         list,

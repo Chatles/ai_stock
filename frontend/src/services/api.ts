@@ -22,8 +22,20 @@ export const fetchNotices = async (params: {
   pageSize?: number;
   market?: string;
   keyword?: string;
+  noticeType?: string;
 }): Promise<NoticeResponse> => {
   const response = await apiClient.get<NoticeResponse>('/notices', { params });
+  return response.data;
+};
+
+export interface NoticeTypeResponse {
+  code: number;
+  data: Array<{ type: string; count: number }>;
+  message: string;
+}
+
+export const fetchNoticeTypes = async (): Promise<NoticeTypeResponse> => {
+  const response = await apiClient.get<NoticeTypeResponse>('/notice-types');
   return response.data;
 };
 
@@ -79,6 +91,7 @@ export const getFundamental = async (code: string): Promise<FundamentalResponse>
 
 export const api = {
   getNotices: fetchNotices,
+  getNoticeTypes: fetchNoticeTypes,
   getAnalysisNotices,
   analyzeNotice,
   getFundamental,

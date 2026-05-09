@@ -28,4 +28,5 @@ export interface QueryParams {
   keyword?: string;
   startDate?: string;
   endDate?: string;
+  noticeType?: string;
 }
